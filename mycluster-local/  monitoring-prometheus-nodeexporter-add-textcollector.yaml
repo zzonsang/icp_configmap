@@ -1,0 +1,220 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "DaemonSet",
+  "metadata": {
+    "name": "monitoring-prometheus-nodeexporter",
+    "namespace": "kube-system",
+    "labels": {
+      "app": "monitoring-prometheus",
+      "chart": "ibm-icpmonitoring",
+      "component": "nodeexporter",
+      "heritage": "Tiller",
+      "release": "monitoring",
+      "role": "nodeexporter"
+    },
+    "annotations": {
+      "deprecated.daemonset.template.generation": "1"
+    }
+  },
+  "spec": {
+    "selector": {
+      "matchLabels": {
+        "app": "monitoring-prometheus",
+        "chart": "ibm-icpmonitoring",
+        "component": "nodeexporter",
+        "heritage": "Tiller",
+        "release": "monitoring",
+        "role": "nodeexporter"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "monitoring-prometheus",
+          "chart": "ibm-icpmonitoring",
+          "component": "nodeexporter",
+          "heritage": "Tiller",
+          "release": "monitoring",
+          "role": "nodeexporter"
+        },
+        "annotations": {
+          "productID": "none",
+          "productName": "node-exporter",
+          "productVersion": "v0.16.0",
+          "scheduler.alpha.kubernetes.io/critical-pod": ""
+        }
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "proc",
+            "hostPath": {
+              "path": "/proc",
+              "type": ""
+            }
+          },
+          {
+            "name": "sys",
+            "hostPath": {
+              "path": "/sys",
+              "type": ""
+            }
+          },
+          {
+            "name": "router-config",
+            "configMap": {
+              "name": "monitoring-prometheus-exporter-router-nginx-config",
+              "items": [
+                {
+                  "key": "nodeexporter.nginx.conf",
+                  "path": "nginx.conf"
+                }
+              ],
+              "defaultMode": 420
+            }
+          },
+          {
+            "name": "router-entry",
+            "configMap": {
+              "name": "monitoring-monitoring-router-entry-config",
+              "defaultMode": 484
+            }
+          },
+          {
+            "name": "monitoring-ca-certs",
+            "secret": {
+              "secretName": "monitoring-monitoring-exporter-certs",
+              "defaultMode": 420
+            }
+          },
+          {
+            "name": "monitoring-certs",
+            "secret": {
+              "secretName": "monitoring-monitoring-exporter-certs",
+              "defaultMode": 420
+            }
+          }
+        ],
+        "containers": [
+          {
+            "name": "nodeexporter",
+            "image": "ibmcom/node-exporter:v0.16.0-f2",
+            "args": [
+              "--path.procfs=/host/proc",
+              "--path.sysfs=/host/sys",
+              "--collector.textfile.directory=/home/vagrant/collector_text"
+            ],
+            "resources": {},
+            "volumeMounts": [
+              {
+                "name": "proc",
+                "readOnly": true,
+                "mountPath": "/host/proc"
+              },
+              {
+                "name": "sys",
+                "readOnly": true,
+                "mountPath": "/host/sys"
+              }
+            ],
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/metrics",
+                "port": 9100,
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 30,
+              "timeoutSeconds": 30,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "failureThreshold": 3
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/metrics",
+                "port": 9100,
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 30,
+              "timeoutSeconds": 30,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "failureThreshold": 3
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "imagePullPolicy": "IfNotPresent",
+            "securityContext": {
+              "runAsUser": 65534,
+              "procMount": "Default"
+            }
+          },
+          {
+            "name": "router",
+            "image": "ibmcom/icp-management-ingress:2.2.3",
+            "command": [
+              "/opt/ibm/router/entry/entrypoint.sh"
+            ],
+            "env": [
+              {
+                "name": "NODE_NAME",
+                "valueFrom": {
+                  "fieldRef": {
+                    "apiVersion": "v1",
+                    "fieldPath": "spec.nodeName"
+                  }
+                }
+              }
+            ],
+            "resources": {},
+            "volumeMounts": [
+              {
+                "name": "router-config",
+                "mountPath": "/opt/ibm/router/conf"
+              },
+              {
+                "name": "router-entry",
+                "mountPath": "/opt/ibm/router/entry"
+              },
+              {
+                "name": "monitoring-ca-certs",
+                "mountPath": "/opt/ibm/router/caCerts"
+              },
+              {
+                "name": "monitoring-certs",
+                "mountPath": "/opt/ibm/router/certs"
+              }
+            ],
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "imagePullPolicy": "IfNotPresent"
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "serviceAccountName": "default",
+        "serviceAccount": "default",
+        "hostNetwork": true,
+        "hostPID": true,
+        "securityContext": {},
+        "schedulerName": "default-scheduler",
+        "tolerations": [
+          {
+            "key": "dedicated",
+            "operator": "Exists",
+            "effect": "NoSchedule"
+          }
+        ]
+      }
+    },
+    "updateStrategy": {
+      "type": "RollingUpdate",
+      "rollingUpdate": {
+        "maxUnavailable": 1
+      }
+    },
+    "minReadySeconds": 5,
+    "revisionHistoryLimit": 10
+  }
+}
